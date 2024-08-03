@@ -45,10 +45,11 @@ classdef CVTMAPElites
 
                     if length(tempPop) == 1
                         % random perturbation when only one solution
-                        if rand < 0.5
-                            tempOff = Problem.lower + Problem.upper - rand(1, Problem.D) .* tempPop.decs;
-                        else
-                            tempOff = Problem.lower + rand(1, Problem.D) .* (Problem.upper - tempPop.decs);
+
+                        tempOff = Problem.lower + Problem.upper - rand(1, Problem.D) .* tempPop.decs;
+
+                        if rand < 0.2
+                            tempOff = tempPop.decs + rand(1, Problem.D) .* (tempOff - tempPop.decs);
                         end
 
                     else
@@ -63,7 +64,7 @@ classdef CVTMAPElites
 
         end
 
-        function [obj, new_conv, new_div] = AddToCVT(obj, Population, new_conv, new_div)
+        function [obj, newConv, newDiv] = AddToCVT(obj, Population, newConv, newDiv)
             indices = knnsearch(obj.centroids, Population.decs);
 
             for i = unique(indices)'
@@ -87,7 +88,7 @@ classdef CVTMAPElites
                 existPi = Deduplicate(Population(groupIndices).decs, tempPop.decs);
 
                 if size(existPi, 1) ~= length(groupIndices)
-                    [new_conv(i), new_div(i)] = CalculateState(tempPop);
+                    [newConv(i), newDiv(i)] = CalculateState(tempPop);
                 end
 
             end
@@ -103,10 +104,10 @@ classdef CVTMAPElites
 
                 if length(tempPop) == 1
                     % random perturbation when only one solution
-                    if rand < 0.5
-                        tempOff = Problem.lower + Problem.upper - rand(1, Problem.D) .* tempPop.decs;
-                    else
-                        tempOff = Problem.lower + rand(1, Problem.D) .* (Problem.upper - tempPop.decs);
+                    tempOff = Problem.lower + Problem.upper - rand(1, Problem.D) .* tempPop.decs;
+
+                    if rand < 0.2
+                        tempOff = tempPop.decs + rand(1, Problem.D) .* (tempOff - tempPop.decs);
                     end
 
                 else
@@ -132,15 +133,15 @@ classdef CVTMAPElites
 
 end
 
-function [new_conv, new_div] = CalculateState(Pop)
-    new_conv = sum(sum(Pop.objs, 2)) / length(Pop);
+function [newConv, newDiv] = CalculateState(Pop)
+    newConv = sum(sum(Pop.objs, 2)) / length(Pop);
     f_max = max(Pop.objs, [], 1);
     f_min = min(Pop.objs, [], 1);
-    new_div = 1 ./ sum(f_max - f_min);
+    newDiv = 1 ./ sum(f_max - f_min);
 
     % only one non-donimated solution
-    if isinf(new_div)
-        new_div = 0;
+    if isinf(newDiv)
+        newDiv = 0;
     end
 
 end

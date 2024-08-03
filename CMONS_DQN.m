@@ -25,21 +25,16 @@ classdef CMONS_DQN < ALGORITHM
             CVmax = max(sum(max(0, Population2.cons), 2));
             cp = 2; alpha = 0.95; tao = 0.05;
             % Set epsilon to inf for ignoring constraints in search mode 1
-            searchMode = 1; epsilon = inf;
+            searchMode = 1; epsilon = inf; gen = 1;
             % Parameters for change detection
             maxChange = 1; threshold = 1e-2;
 
             Fitness1 = CalFitness(Population1.objs, Population1.cons, 0);
             Fitness2 = CalFitness(Population2.objs, Population2.cons, epsilon);
 
-            gen = 1;
-
             %% For DQL
-            greedy = 0.95;
-            gamma = 0.9;
-            model_built = 0;
-            count = 0;
-            EP = [];
+            greedy = 0.95; gamma = 0.9;
+            built = 0; count = 0; EP = [];
 
             %% Optimization
             while Algorithm.NotTerminated(Population1)
@@ -52,16 +47,15 @@ classdef CMONS_DQN < ALGORITHM
                     action = rank(1:numSamples);
                 else
                     % Choose an action based on the trained net
-                    if ~model_built
+                    if ~built
                         % Build model
-                        use_EP = randperm(length(EP), 200);
-                        tr_x = EP(use_EP, 1:3);
-                        tr_y = EP(use_EP, 4:6);
-                        [net, Params] = trainmodel(tr_x, tr_y, []);
-                        model_built = 1;
+                        rEP = randperm(length(EP), 200);
+                        trX = EP(rEP, 1:3);
+                        trY = EP(rEP, 4:6);
+                        [net, Params] = trainmodel(trX, trY, []);
+                        built = 1;
                         action = randi([1, numCentroids], [numSamples, 1]);
                     else
-
                         % Use the model to choose action
                         x = [newConv, newDiv, (1:numCentroids)'];
                         x = mapminmax(x', 0, 1)';
@@ -83,11 +77,11 @@ classdef CMONS_DQN < ALGORITHM
                 Mate1 = TournamentSelection(2, NP, -CrowdDis1);
                 Mate2 = TournamentSelection(2, NP, -CrowdDis2);
 
-                % Novelty Search
+                % Novelty Search with DE/current-to-rand/1
                 [CVT, Offspring1_1] = CVT.CentroidsGeneration(Problem, Population1(Mate1), 0);
                 [CVT, Offspring2_1] = CVT.CentroidsGeneration(Problem, Population2(Mate2), epsilon);
 
-                % Fitnesss-Driven Search
+                % Fitnesss-Driven Search with DE/rand-to-best/1
                 Offspring1_2 = DE_rand_to_best_1(Problem, Population1.decs, Fitness1, NP, 0.1);
                 Offspring2_2 = DE_rand_to_best_1(Problem, Population2.decs, Fitness2, NP, 0.1);
 
@@ -108,7 +102,6 @@ classdef CMONS_DQN < ALGORITHM
                 end
 
                 if searchMode == 1
-                    % Exploring stage
                     Objvalues(gen) = sum(sum(Population2.objs, 1));
                     [FrontNo2, ~] = NDSort(Population2.objs, size(Population2.objs, 1));
                     NC2 = sum(FrontNo2 == 1);
@@ -140,9 +133,9 @@ classdef CMONS_DQN < ALGORITHM
 
                 %% Update experience replay
                 reward = (oldConv + oldDiv) - (newConv + newDiv);
-                current_record = [oldConv, oldDiv, (1:numCentroids)', reward, newConv, newDiv];
-                current_record = mapminmax(current_record', 0, 1)';
-                EP = [current_record(reward ~= 0, :); EP];
+                record = [oldConv, oldDiv, (1:numCentroids)', reward, newConv, newDiv];
+                record = mapminmax(record', 0, 1)';
+                EP = [record(reward ~= 0, :); EP];
 
                 if size(EP, 1) > 400
                     EP(401:end, :) = [];
@@ -150,18 +143,18 @@ classdef CMONS_DQN < ALGORITHM
 
                 %% Update Q-net
                 % Update net model every 50 generations
-                if model_built
+                if built
                     count = count + 1;
 
                     if count > 50
                         % Update model
-                        use_EP = randperm(length(EP), 200);
-                        tr_x = EP(use_EP, 1:3);
-                        reward = testNet(tr_x, net, Params);
+                        rEP = randperm(length(EP), 200);
+                        trX = EP(rEP, 1:3);
+                        reward = testNet(trX, net, Params);
                         succ = reward(:, 1);
-                        tr_y = EP(use_EP, 4) + gamma * max(succ);
-                        tr_y = mapminmax(tr_y', 0, 1)';
-                        net = updatemodel(tr_x, tr_y, Params, net);
+                        trY = EP(rEP, 4) + gamma * max(succ);
+                        trY = mapminmax(trY', 0, 1)';
+                        net = updatemodel(trX, trY, Params, net);
                         count = 0;
                     end
 

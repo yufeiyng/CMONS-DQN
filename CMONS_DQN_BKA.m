@@ -29,21 +29,16 @@ classdef CMONS_DQN_BKA < ALGORITHM
             CVmax = max(sum(max(0, Population2.cons), 2));
             cp = 2; alpha = 0.95; tao = 0.05;
             % Set epsilon to inf for ignoring constraints in search mode 1
-            searchMode = 1; epsilon = inf;
+            searchMode = 1; epsilon = inf; gen = 1;
             % Parameters for change detection
             maxChange = 1; threshold = 1e-2;
 
             [Population1, Fitness1] = EnvironmentalSelection([Population1, centroids], Problem.N, true, 0);
             [Population2, Fitness2] = EnvironmentalSelection([Population2, centroids], Problem.N, false, epsilon);
 
-            gen = 1;
-
             %% For DQL
-            greedy = 0.95;
-            gamma = 0.9;
-            model_built = 0;
-            count = 0;
-            EP = [];
+            greedy = 0.95; gamma = 0.9;
+            built = 0; count = 0; EP = [];
 
             %% Optimization
             while Algorithm.NotTerminated(Population1)
@@ -56,13 +51,13 @@ classdef CMONS_DQN_BKA < ALGORITHM
                     action = rank(1:numSamples);
                 else
                     % Choose an action based on the trained net
-                    if ~model_built
+                    if ~built
                         % Build model
-                        use_EP = randperm(length(EP), 200);
-                        tr_x = EP(use_EP, 1:3);
-                        tr_y = EP(use_EP, 4:6);
-                        [net, Params] = trainmodel(tr_x, tr_y, []);
-                        model_built = 1;
+                        rEP = randperm(length(EP), 200);
+                        trX = EP(rEP, 1:3);
+                        trY = EP(rEP, 4:6);
+                        [net, Params] = trainmodel(trX, trY, []);
+                        built = 1;
                         action = randi([1, numCentroids], [numSamples, 1]);
                     else
 
@@ -76,9 +71,9 @@ classdef CMONS_DQN_BKA < ALGORITHM
                 end
 
                 % Novelty Search
-                [CVT, Offspring3] = CVT.NoveltySearchX(Problem, action);
+                [CVT, Offspring3] = CVT.NoveltySearch(Problem, action);
 
-                % Generate offspring
+                % Generate offspring with BKA
                 Offspring1 = OperatorBKA(Problem, Population1, Fitness1);
                 Offspring2 = OperatorBKA(Problem, Population2, Fitness2);
 
@@ -96,7 +91,6 @@ classdef CMONS_DQN_BKA < ALGORITHM
                 end
 
                 if searchMode == 1
-                    % Exploring stage
                     Objvalues(gen) = sum(sum(Population2.objs, 1));
                     [FrontNo2, ~] = NDSort(Population2.objs, size(Population2.objs, 1));
                     NC2 = sum(FrontNo2 == 1);
@@ -128,9 +122,9 @@ classdef CMONS_DQN_BKA < ALGORITHM
 
                 %% Update experience replay
                 reward = (oldConv + oldDiv) - (newConv + newDiv);
-                current_record = [oldConv, oldDiv, (1:numCentroids)', reward, newConv, newDiv];
-                current_record = mapminmax(current_record', 0, 1)';
-                EP = [current_record(reward ~= 0, :); EP];
+                record = [oldConv, oldDiv, (1:numCentroids)', reward, newConv, newDiv];
+                record = mapminmax(record', 0, 1)';
+                EP = [record(reward ~= 0, :); EP];
 
                 if size(EP, 1) > 400
                     EP(401:end, :) = [];
@@ -138,18 +132,18 @@ classdef CMONS_DQN_BKA < ALGORITHM
 
                 %% Update Q-net
                 % Update net model every 50 generations
-                if model_built
+                if built
                     count = count + 1;
 
                     if count > 50
                         % Update model
-                        use_EP = randperm(length(EP), 200);
-                        tr_x = EP(use_EP, 1:3);
-                        reward = testNet(tr_x, net, Params);
+                        rEP = randperm(length(EP), 200);
+                        trX = EP(rEP, 1:3);
+                        reward = testNet(trX, net, Params);
                         succ = reward(:, 1);
-                        tr_y = EP(use_EP, 4) + gamma * max(succ);
-                        tr_y = mapminmax(tr_y', 0, 1)';
-                        net = updatemodel(tr_x, tr_y, Params, net);
+                        trY = EP(rEP, 4) + gamma * max(succ);
+                        trY = mapminmax(trY', 0, 1)';
+                        net = updatemodel(trX, trY, Params, net);
                         count = 0;
                     end
 
